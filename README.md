@@ -1,104 +1,184 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/BX65L5j-)
-# Семинар 2
-
-Данная работа направлена на изучение структур данных типа Hash Table.
-В рамках данной работы вам предстоит выполнить следующие задания:
-
-- [ ] Освежить память в части хэш-таблиц, поработав с [симулятором заполнения хэш-таблицы](https://www.cs.usfca.edu/~galles/visualization/OpenHash.html)
-- [ ] Поэкспериментировать с хэш-таблицами в [симуляторе кастомных хэш-функций](https://iswsa.acm.org/mphf/openDSAPerfectHashAnimation/perfectHashAV.html). Здесь можно выбрать разные хэш-функции, методы разрешения коллизий и т.д.
-- [ ] Прочитайте [полезную статью](https://habr.com/ru/companies/ruvds/articles/747084/), чтобы дальше было проще создать свою хэш-функцию
-- [ ] Далее определите свой вариант **N**, чтобы выполнить задание ниже
-- [ ] Сделайте отчёт о проделанной работе
-
-Выберите ваш метод разрешения коллизий:
-- N % 4 = 0 - **Метод цепочек** 
-- N % 4 = 1 - **Открытая адресация: линейное пробирование**
-- N % 4 = 2 - **Открытая адресация: квадратичное пробирование**
-- N % 4 = 3 - **Открытая адресация: двойное хэширование**
-
-Далее вам необходимо придумать любой класс данных. Неважно, что это будет, главное, чтобы:
-1) Вы придумали его **сами**!
-2) В нём было хотя бы одно поле типа **int** и одно типа **string** (больше - на ваше усмотрение)
-
-Что-то типа такого:
-
-```
-class myTypeOfData{
-	int year;
-	string name;
-	// other variables (if needed)
-};
-```
-Только из названия вашего типа данных, должно быть понятно, что это. То есть типа class Student с номером зачётки и именем, или class Car и т.д.
-
-Далее необходимо реализовать классическую хэш-таблицу, со следующими параметрами. У хэш-таблицы должны быть:
-
-- [ ] Метод вставки элемента
-- [ ] Метод поиска элемента
-- [ ] Метод удаления элемента
-- [ ] Метод вывода хэш-таблицы
-- [ ] Сама хэш-функция (разумеется!)
-
-Самый главный параметр оценки вашей работы - это оригинальность вашей хэш-функции, вы можете использовать разные методы:
-- Комбинирование хэшей полей
-- Полиномиальное хэширование
-- Хэширование на основе битовых операций
-- Хэширование на основе строкового представления
-
-В результате, исходя из того, как вы строите хэш-таблицу, у каждого код будет выглядеть по-своему.
-Шаблоны в итоговой сборке использовать не надо (шаблоны только в примере для абстракции), только стандартные типы данных, по итогу должен получиться файл .cpp примерно такого содержания:
-
-```
 #include <iostream>
-#include <vector>
-#include <list>
 #include <string>
+#include <vector>
+#include <functional>
 
-template <typename K, typename V>
-struct KeyValuePair {
-    K key;
-    V value;
+using namespace std;
+
+class Cat {
+public:
+    string name;
+    int weight;
+
+    Cat(string name, int weight) : name(name), weight(weight) {}
+
+    Cat()
+    {
+        this->name = "";
+        this->weight = 0;
+    }
 };
 
-template <typename K, typename V, typename Hash = std::hash<K>>
+
 class HashTable {
 private:
-    std::vector<std::list<KeyValuePair<K, V>>> table; // Вектор списков для хранения данных
-    size_t capacity; // Размер таблицы
-    Hash hashFunction; // Хэш-функция
+    vector<Cat> table;
+    size_t capacity; //размер хэш-таблицы
+    size_t itemCount;//текущая заполненность таблицы
+    int hashFunction( Cat cat)
+    {
+        //хэш-функция на основе битовых операций
+        int hash = 0;
+        for (char c : cat.name)
+        {
+            hash = (hash * 5) + c;
+        }
 
-    // Внутренние методы
-    size_t getIndex(const K& key) const; // Получить индекс по ключу
-    void rehash(); // Рехэширование
+        hash = (hash << 5) ^ (hash >> 27);
+        hash ^= cat.weight * 17;
+       return hash;
+    }
+
+    int hash2(Cat cat) {
+        return 7 - (hashFunction(cat) % 7); // Вторая хеш-функция, никогда не ноль
+    }
+
+    int findSlot( Cat cat)  {
+        size_t index = hashFunction(cat) % capacity;
+        size_t step = hash2(cat);
+
+        for (size_t i = 0; i < capacity; ++i) {
+            size_t helpIndex = (index + i * step) % capacity;//Первая итерация цикла, сразу пытаемся ткнуться по полю index, тк. i=0 и step занулится.
+            if (table[helpIndex].name.empty()) {
+                return helpIndex;
+            }
+            if (table[helpIndex].name== cat.name && table[helpIndex].weight==cat.weight) {//Если верхний вариант не выгорел, применяем другой индекс, найденый с использованием 2-ой хэш функции
+                return helpIndex;
+            }
+        }
+        return capacity; // Таблица заполнена
+    }
+
+    void rehash() {
+        size_t newCapacity = capacity * 2;//доступный размер увеличиваем в два
+        vector<Cat> newTable(newCapacity);
+        capacity = newCapacity;
+        itemCount = 0;
+        vector<Cat> oldTable = table;
+        table = newTable;
+
+        //Перекидываем котов в новую расширенную табличку
+        for (Cat cat : oldTable) {
+            if (!cat.name.empty()) {
+                insert(cat);
+            }
+        }
+    }
 
 public:
-    // Конструкторы
-    HashTable(size_t initialCapacity = 10);
-    ~HashTable();
+    HashTable(size_t initialCapacity = 3) : capacity(initialCapacity), table(initialCapacity), itemCount(0) {
+        for (int i = 0; i < capacity; i++) {
+            table[i] = Cat("", 0);
+        }
+    }
 
-    // Основные операции
-    void insert(const K& key, const V& value); // Вставка элемента
-    bool remove(const K& key); // Удаление элемента
-    bool find(const K& key, V& value) const; // Поиск элемента
-    void clear(); // Очистка таблицы
+    ~HashTable() {}
 
-    // Дополнительные методы
-    size_t size() const; // Количество элементов в таблице
-    bool isEmpty() const; // Проверка на пустоту
-    void print() const; // Вывод таблицы
+    void insert(Cat cat) {
+        size_t index = findSlot(cat);
+        if (index < capacity) {
+            table[index] = cat;
+            itemCount++;
+            if (itemCount > capacity / 2) {
+                rehash();
+            }
+        }
+    }
 
-    // Итераторы (опционально)
-    class Iterator;
-    Iterator begin();
-    Iterator end();
+    Cat search(Cat cat) {
+        size_t index = hashFunction(cat) % capacity;
+        size_t step = hash2(cat);
+
+        for (size_t i = 0; i < capacity; ++i) {
+            size_t helpIndex = (index + i * step) % capacity;
+            if (table[helpIndex].name.empty()) {
+                return Cat("", 0);
+            }
+            if (table[helpIndex].name == cat.name && table[helpIndex].weight == cat.weight) {
+                return table[helpIndex];
+            }
+        }
+        return Cat("", 0);
+    }
+
+    bool remove(Cat cat) {
+        size_t index = hashFunction(cat) % capacity;
+        size_t step = hash2(cat);
+
+        for (size_t i = 0; i < capacity; ++i) {
+            size_t helpIndex = (index + i * step) % capacity;
+            if (table[helpIndex].name.empty()) {
+                return false;
+            }
+            if (table[helpIndex].name == cat.name && table[helpIndex].weight == cat.weight) {
+                table[helpIndex] = Cat("", 0);
+                itemCount--;
+                return true;
+            }
+        }
+        return false; 
+    }
+
+    void print(bool withEmpties) //Функция принта с возможностью не выводить пустые
+    {
+        for (size_t i = 0; i < capacity; i++) {
+            if (!table[i].name.empty()) {
+                cout << "Индекс " << i << ": (" << table[i].name << ", " << table[i].weight << ")" << endl;
+            }
+            else {
+                if (withEmpties)
+                cout << "Индекс " << i << ": Пустор" << endl;
+            }
+        }
+    }
+
 };
 
+int main() {
 
-```
+    setlocale(LC_ALL, "Russian");
+    HashTable hashTable(10);
 
-Отчёт о проделанной работе должен содержать:
-- [ ] Скриншот из [симулятора кастомных хэш-функций](https://iswsa.acm.org/mphf/openDSAPerfectHashAnimation/perfectHashAV.html), на котором вы показали, что работали с ним и заполнили его.
-- [ ] Файл .cpp с реализацией хэш-таблицы должен лежать в репозитории
-- [ ] В readme напишите свой вариант по списку и какое задание вам досталось, расскажите алгоритм работы, обоснование выбранных методов хэширования и типов данных
-- [ ] Всегда есть поле для творческой работы, поэтому можно по желанию добавить фичи или интересные доп. функции к хэш-таблице и рассказать о них 
+    Cat cat1("Барсик", 5);
+    Cat cat2("Мурзик", 7);
+    Cat cat3("Автобус", 6);
+    Cat cat4("Барсик", 5);
 
+    hashTable.insert(cat1);
+    hashTable.insert(cat2);
+    hashTable.insert(cat3);
+
+
+    cout << "Таблица после инсЁртов:" << endl;
+    hashTable.print(true);
+
+    Cat foundCat = hashTable.search(cat4);
+    if (!foundCat.name.empty()) {
+        cout << "Найденный кот: " << foundCat.name << ", " << foundCat.weight << endl;
+    }
+    else {
+        cout << "Не найдено" << endl;
+    }
+
+    if (hashTable.remove(cat1)) {
+        cout << "Удалённый кот: " << cat1.name << endl;
+    }
+    else {
+        cout << "Кот не найден" << endl;
+    }
+
+    cout << "Таблица после удаления кота" << endl;
+    hashTable.print(false);
+
+    return 0;
+}
